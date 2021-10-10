@@ -1,0 +1,6 @@
+.ccls-cache
+.ccls
+.clang-format
+
+*/build
+*/.vs
