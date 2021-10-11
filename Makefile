@@ -25,16 +25,14 @@ endif
 
 OBJ_DIR := build/obj
 
-.PHONY: build-all lib asm clean-default
+.PHONY: build-all clean-default
 
-lib:
+build-all: lib lcasm
 	+${MAKE} -C lib build
-
-asm:
-	+${MAKE} -C asm build
-
-build-all: lib asm
+	+${MAKE} -C lcasm build
+	+${MAKE} -C lcemu build
 
 clean-default:
 	+${MAKE} -C lib clean
-	+${MAKE} -C asm clean
+	+${MAKE} -C lcasm clean
+	+${MAKE} -C lcemu clean

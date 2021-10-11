@@ -13,7 +13,7 @@ std::string read_file(const char* filePath) {
     }
 
     std::streamsize fileSize = file.tellg();
-    std::string res((std::size_t)fileSize, ' ');
+    std::string res((size_t)fileSize, ' ');
     file.seekg(0);
     file.read(&res[0], fileSize);
     file.close();
