@@ -1,11 +1,10 @@
-
 PLATFORM := $(shell uname -s)
 ifneq ($(findstring MSYS,$(PLATFORM)),)
 PLATFORM := windows32
 endif
 
 ifneq ($(PLATFORM),windows32)
-${warn Build not test on ${PLATFORM}}
+$(warn Build not test on ${PLATFORM})
 MAKE := make
 MKDIR := mkdir
 RM := rm
@@ -21,18 +20,47 @@ else
 CC := clang++
 CFLAGS += -O3
 CFLAGS += -std=c++17 -Wall -Wextra -Werror -Wsign-conversion
+CFLAGS += -I./utils/src
 endif
 
-OBJ_DIR := build/obj
+BIN_DIR ?= bin
+OBJ_DIR ?= build/obj
 
-.PHONY: build-all clean-default
+ifdef DEPS
+-include ${DEPS}
+endif
 
-build-all: lib lcasm
-	+${MAKE} -C lib build
-	+${MAKE} -C lcasm build
-	+${MAKE} -C lcemu build
+get-objs = $(patsubst $1/src/%.cpp,$1/$(OBJ_DIR)/%.o, $(shell ls $1/src/*.cpp))
+get-deps = $(patsubst $1/src/%.cpp,$1/$(OBJ_DIR)/%.d, $(shell ls $1/src/*.cpp))
+clean-dir = ${RM} -f $1/${OBJ_DIR}/*
 
-clean-default:
-	+${MAKE} -C lib clean
-	+${MAKE} -C lcasm clean
-	+${MAKE} -C lcemu clean
+DIRECTORIES := lcasm lcc lcemu
+
+.PHONY: build-all ${DIRECTORIES} clean
+
+build-all: utils ${DIRECTORIES}
+
+${DIRECTORIES}: utils
+	@printf "\nBuilding $@...\n"
+	@${MAKE} ${BIN_DIR}/$@.exe DIR=$@ OBJS="$(call get-objs,$@)" DEPS="$(call get-deps,$@)"
+
+utils: force
+	@printf "\nBuilding $@...\n"
+	$(eval OBJS := $(call get-objs,$@))
+	@${MAKE} ${OBJS} DIR=$@ OBJS="${OBJS}" DEPS="$(call get-deps,$@)"
+
+force:
+
+${BIN_DIR}/${DIR}.exe: ${OBJS} $(call get-objs,utils)
+	@${MKDIR} -p ${dir $@}
+	${CC} ${CFLAGS} $^ -o $@
+
+${DIR}/build/obj/%.o: ${DIR}/src/%.cpp
+	@${MKDIR} -p ${dir $@}
+	${CC} ${CFLAGS} -c $< -MMD -MF $(@:.o=.d) -o $@
+
+clean:
+	${RM} -f ${BIN_DIR}/*
+	$(call clean-dir,lcasm)
+	$(call clean-dir,lcemu)
+	$(call clean-dir,utils)

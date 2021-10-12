@@ -48,7 +48,7 @@ struct Parser {
     char operandCnt;
 
     Lexer lex;
-    SymTable symTable;
+    SymTable<uint16_t> symTable;
 
     bool hasDefinedOrig;
     bool hasDefinedEnd;

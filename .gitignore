@@ -2,5 +2,6 @@
 .ccls
 .clang-format
 
-*/build
 */.vs
+bin/*
+*/build

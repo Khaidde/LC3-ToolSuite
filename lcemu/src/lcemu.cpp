@@ -3,8 +3,9 @@
 struct LC3 {
     uint8_t reg1();
     uint8_t reg2();
-    int16_t pcoffset9();
     int8_t imm5();
+    int16_t pcoffset9();
+    int8_t offset6();
 
     void execute();
     void emulate(const char* binPath);
@@ -22,15 +23,11 @@ uint8_t LC3::reg1() { return (IR >> 9) & 0x7; }
 
 uint8_t LC3::reg2() { return (IR >> 6) & 0x7; }
 
-int16_t LC3::pcoffset9() {
-    int16_t pcoff = (IR & 0x1FF);
-    return (pcoff & 0x1FF) | ((pcoff & 0x100) ? (int16_t)0xFE00 : 0);
-}
+int8_t LC3::imm5() { return (IR & 0x1F) | ((IR & 0x10) ? (int8_t)0xE0 : 0); }
 
-int8_t LC3::imm5() {
-    int8_t imm5 = (IR & 0x1F);
-    return (imm5 & 0x1F) | ((imm5 & 0x10) ? (int8_t)0xE0 : 0);
-}
+int16_t LC3::pcoffset9() { return (IR & 0x1FF) | ((IR & 0x100) ? (int16_t)0xFE00 : 0); }
+
+int8_t LC3::offset6() { return (IR & 0x3F) | ((IR & 0x20) ? (int8_t)0xC0 : 0); }
 
 void LC3::execute() {
     char opcode = IR >> 12;
@@ -60,7 +57,7 @@ void LC3::execute() {
         case 0x4:  // JSR/JSRR
             R[7] = PC;
             if (IR & 0x800) {
-                PC = PC + (int16_t)(IR & 0x7FF);
+                PC += (IR & 0x7FF) | ((IR & 0x400) ? (int16_t)0xF800 : 0);
             } else {
                 PC = R[reg2()];
             }
@@ -73,10 +70,10 @@ void LC3::execute() {
             }
             break;
         case 0x6:  // LDR
-            cc = R[reg1()] = memory[R[reg2()] + (int8_t)(IR & 0x3F)];
+            cc = R[reg1()] = memory[R[reg2()] + offset6()];
             break;
         case 0x7:  // STR
-            cc = memory[R[reg2()] + (int8_t)(IR & 0x3F)] = R[reg1()];
+            cc = memory[R[reg2()] + offset6()] = R[reg1()];
             break;
         case 0x8: {
             fatal("Opcode 0x8 is undefined");
@@ -125,13 +122,12 @@ void LC3::emulate(const char* binPath) {
         IR = memory[PC++];
         execute();
     }
-    printf("%04x\n", memory[0x3009]);
 }
 
 int main(int argc, char** argv) {
     printf("lcemu version 1.0\n");
 
-    if (argc != 2 && argc != 3) {
+    if (argc != 2) {
         printf("Usage: lcemu [source_file].bin\n");
         return -1;
     }

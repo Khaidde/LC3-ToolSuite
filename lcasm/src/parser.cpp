@@ -93,7 +93,11 @@ void Parser::first_pass_parse() {
             lex.error("Must define .ORIG as the first line");
         }
         if (tkn.kind == TokenKind::LABEL) {
-            symTable.insert(tkn.labelName, curAddr);
+            SymEntry<uint16_t>* entry = symTable.try_insert(tkn.labelName, std::move(curAddr));
+            if (entry) {
+                fatal("Error: duplicate label '%s' at address x%04x and x%04x\n",
+                      std::string(entry->symbol).c_str(), curAddr, entry->data);
+            }
             tkn = lex.eat_token();
             if (tkn.kind == TokenKind::E_O_F) {
                 break;
@@ -241,9 +245,13 @@ void Parser::second_pass_parse(const char* destPath) {
     for (int i = baseAddr; i < endAddr; i++) {
         Word& word = memory[i];
         if (!word.isMachineCode) {
-            SymEntry* entry = symTable.get(word.offLabel);
+            uint16_t* entry = symTable.get(word.offLabel);
+            if (entry == nullptr) {
+                fatal("Could not find referenced label: '%s'\n",
+                      std::string(word.offLabel).c_str());
+            }
 
-            word.offVal = entry->address - (int16_t)(i + 1);
+            word.offVal = *entry - (int16_t)(i + 1);
             word.data = build_instr(word);
         }
 
