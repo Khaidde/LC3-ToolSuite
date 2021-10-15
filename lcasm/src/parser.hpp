@@ -50,10 +50,9 @@ struct Parser {
     Lexer lex;
     SymTable<uint16_t> symTable;
 
-    bool hasDefinedOrig;
-    bool hasDefinedEnd;
-    uint16_t baseAddr;  // Start address of code
-    uint16_t curAddr;   // Current address
+    bool isOrigBlock;
+
+    uint16_t curAddr;  // Current address
     uint16_t endAddr;
     Word memory[1 << 16];
 };

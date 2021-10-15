@@ -29,6 +29,7 @@ enum class TokenKind {
 
     REG,
     LITERAL,
+    STR_LITERAL,
     LABEL,
 
     COMMA,
@@ -37,11 +38,11 @@ enum class TokenKind {
 
 struct Token {
     Token(TokenKind kind) : kind(kind) {}
-    Token(std::string_view&& labelName) : kind(TokenKind::LABEL), labelName(labelName) {}
+    Token(TokenKind kind, std::string_view&& str) : kind(kind), str(str) {}
     Token(TokenKind kind, uint16_t num) : kind(kind), num(num) {}
     TokenKind kind;
     union {
-        std::string_view labelName;
+        std::string_view str;
         uint16_t num;
     };
 };

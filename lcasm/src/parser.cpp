@@ -2,9 +2,7 @@
 
 void Parser::load_source(std::string&& src) {
     operandCnt = 0;
-    hasDefinedOrig = false;
-    hasDefinedEnd = false;
-    baseAddr = 0x0000;
+    isOrigBlock = false;
     curAddr = 0x0000;
     endAddr = 0x0000;
 
@@ -31,7 +29,7 @@ char Parser::try_parse_register() {
 void Parser::try_parse_pcoffset(Word&& word) {
     Token tkn = lex.eat_token();
     if (tkn.kind == TokenKind::LABEL) {
-        word.offLabel = tkn.labelName;
+        word.offLabel = tkn.str;
         insert_word(std::move(word));
     } else if (tkn.kind == TokenKind::LITERAL) {
         word.offVal = (int16_t)tkn.num;
@@ -89,11 +87,11 @@ void Parser::first_pass_parse() {
     Token tkn = lex.eat_token();
     while (tkn.kind != TokenKind::E_O_F) {
         operandCnt = 0;
-        if (!hasDefinedOrig && tkn.kind != TokenKind::ORIG) {
-            lex.error("Must define .ORIG as the first line");
+        if (!isOrigBlock && tkn.kind != TokenKind::ORIG) {
+            lex.error("Must define .ORIG before block of instructions");
         }
         if (tkn.kind == TokenKind::LABEL) {
-            SymEntry<uint16_t>* entry = symTable.try_insert(tkn.labelName, std::move(curAddr));
+            SymEntry<uint16_t>* entry = symTable.try_insert(tkn.str, std::move(curAddr));
             if (entry) {
                 fatal("Error: duplicate label '%s' at address x%04x and x%04x\n",
                       std::string(entry->symbol).c_str(), curAddr, entry->data);
@@ -106,16 +104,18 @@ void Parser::first_pass_parse() {
         instrKind = tkn.kind;
         switch (instrKind) {
             case TokenKind::ORIG:
-                if (hasDefinedOrig) {
-                    lex.error("Assembler currently only allows one .ORIG statement");
+                if (isOrigBlock) {
+                    lex.error("Must define .END before starting another .ORIG block");
                 }
-                hasDefinedOrig = true;
+                isOrigBlock = true;
                 tkn = lex.eat_token();
                 if (tkn.kind != TokenKind::LITERAL) {
                     lex.error(".ORIG must be followed by a literal");
                 }
-                baseAddr = tkn.num;
-                curAddr = baseAddr;
+                for (size_t i = curAddr; i < tkn.num; i++) {
+                    insert_word(0);
+                }
+                curAddr = tkn.num;
                 break;
             case TokenKind::FILL:
                 tkn = lex.eat_token();
@@ -133,9 +133,24 @@ void Parser::first_pass_parse() {
                     insert_word(0);
                 }
                 break;
+            case TokenKind::STRINGZ:
+                tkn = lex.eat_token();
+                if (tkn.kind != TokenKind::STR_LITERAL) {
+                    lex.error("Expected a string literal after .STRINGZ");
+                }
+                for (const char& ch : tkn.str) {
+                    insert_word((uint16_t)ch);
+                }
+                insert_word('\0');
+                break;
             case TokenKind::END:
-                hasDefinedEnd = true;
-                endAddr = curAddr;
+                if (!isOrigBlock) {
+                    lex.error("Must define .ORIG before declaring .END");
+                }
+                isOrigBlock = false;
+                if (endAddr < curAddr) {
+                    endAddr = curAddr;
+                }
                 break;
             case TokenKind::HALT:
                 insert_word(0xF025);
@@ -226,7 +241,7 @@ void Parser::first_pass_parse() {
 }
 
 void Parser::second_pass_parse(const char* destPath) {
-    if (!hasDefinedEnd) {
+    if (isOrigBlock) {
         lex.error("Must declare end of file with .END");
     }
 
@@ -238,11 +253,9 @@ void Parser::second_pass_parse(const char* destPath) {
         }
     }
 
-    uint8_t hi = baseAddr >> 8;
-    uint8_t lo = baseAddr & 0xFF;
-    file.write((const char*)&hi, sizeof(uint8_t));
-    file.write((const char*)&lo, sizeof(uint8_t));
-    for (int i = baseAddr; i < endAddr; i++) {
+    bool zeroStr = false;
+    uint16_t zeroStrStart = 0x0000;
+    for (uint16_t i = 0; i < endAddr; i++) {
         Word& word = memory[i];
         if (!word.isMachineCode) {
             uint16_t* entry = symTable.get(word.offLabel);
@@ -261,8 +274,24 @@ void Parser::second_pass_parse(const char* destPath) {
             file.write((const char*)&hi, sizeof(uint8_t));
             file.write((const char*)&lo, sizeof(uint8_t));
         } else {
-            printf("%04x\n", word.data);
+            if (zeroStr) {
+                if (word.data != 0) {
+                    zeroStr = false;
+                    printf("[%04x:%04x)\n", zeroStrStart, i);
+                }
+            }
+            if (!zeroStr) {
+                if (word.data == 0) {
+                    zeroStr = true;
+                    zeroStrStart = i;
+                } else {
+                    printf("%04x\n", word.data);
+                }
+            }
         }
+    }
+    if (zeroStr) {
+        printf("[%04x:%04x)\n", zeroStrStart, endAddr);
     }
     if (destPath) {
         file.close();

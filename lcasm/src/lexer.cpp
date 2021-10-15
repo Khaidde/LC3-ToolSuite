@@ -96,7 +96,7 @@ Token Lexer::eat_label_or_keyword() {
             return Token(keywordMap[i].kind);
         }
     }
-    return Token(std::move(tokenStr));
+    return Token(TokenKind::LABEL, std::move(tokenStr));
 }
 
 Token Lexer::eat_dec_literal() {
@@ -162,6 +162,22 @@ Token Lexer::eat_token() {
                     }
                 }
                 return eat_label_or_keyword();
+            case '"': {
+                size_t curLen = 1;
+                while (curI + curLen < src.size() && src[curI + curLen] != '"') {
+                    if (src[curI + curLen] == '\n') {
+                        error("Must end string with \" on one line");
+                    }
+                    curLen++;
+                }
+                if (curLen == 1) {
+                    error("String literal length must be greater than 1");
+                }
+                std::string_view str(&src[curI + 1], curLen - 1);
+                curI += curLen;
+                curI++;  // Increment past second "
+                return Token(TokenKind::STR_LITERAL, std::move(str));
+            } break;
             case '#':
                 curI++;
             case '-':

@@ -10,11 +10,17 @@ struct LC3 {
     void execute();
     void emulate(const char* binPath);
 
+    void cache_status();
+    void print_status();
+
     bool halted = false;
     uint16_t PC = 0x3000;  // LC3 programs start at 0x3000
     uint16_t IR;
     uint16_t R[8];
     uint16_t cc;  // condition codes - nzp
+
+    uint16_t prevPC;
+    uint16_t prevR[8];
 
     uint16_t memory[1 << 16];
 };
@@ -112,20 +118,67 @@ void LC3::execute() {
     }
 }
 
-void LC3::emulate(const char* binPath) {
-    std::string file = read_file(binPath);
-    size_t baseAddr = (size_t)((file[0] << 8) | (file[1] & 0xFF));
-    for (size_t i = 2; i < file.length(); i += 2) {
-        memory[baseAddr + (i >> 1) - 1] = (file[i] << 8) | (file[i + 1] & 0xFF);
-    }
-    while (!halted) {
-        IR = memory[PC++];
-        execute();
+void LC3::cache_status() {
+    prevPC = PC;
+    for (size_t i = 0; i < 8; i++) {
+        prevR[i] = R[i];
     }
 }
 
+namespace {
+// clang-format off
+const char NUM_OPCODES = 0x10;
+const char* opcodeToStr[NUM_OPCODES] = {
+    "BR",       "ADD",  "LD",  "ST",
+    "JSR/JSRR", "AND",  "LDR", "STR",
+    "UNK_8",    "NOT",  "LDI", "STI",
+    "JMP",      "UNK_D","LEA", "TRAP",
+};
+// clang-format on
+}  // namespace
+
+void LC3::print_status() {
+    printf("--------------\n");
+    printf("PC=%04x -> %04x [%s]\n", prevPC, PC, opcodeToStr[memory[prevPC] >> 12]);
+    for (size_t i = 0; i < 8; i++) {
+        printf("R%d= %4.02x(%6.hi) -> %4.02x(%6.hi)", i, prevR[i], prevR[i], R[i], R[i]);
+        if (prevR[i] != R[i]) {
+            printf(" <-");
+        }
+        printf("\n");
+    }
+    for (size_t i = 0x4100; i < 0x4117; i++) {
+        printf("%c", (char)memory[i]);
+    }
+    printf("|\n");
+}
+
+static int a = 0;
+void LC3::emulate(const char* binPath) {
+    std::string file = read_file(binPath);
+    for (size_t i = 0; i < file.length(); i += 2) {
+        memory[i >> 1] = (file[i] << 8) | (file[i + 1] & 0xFF);
+    }
+    while (!halted) {
+        cache_status();
+        IR = memory[PC++];
+        execute();
+        // if (0x3000 <= prevPC && prevPC <= 0x3001) {
+        // if (0x3002 == prevPC) {
+        if (a++ < 50) {
+            print_status();
+        }
+    }
+    size_t i = 0x4100;
+    while (memory[i]) {
+        printf("%c", (char)memory[i]);
+        i++;
+    }
+    printf("||\n");
+}
+
 int main(int argc, char** argv) {
-    printf("lcemu version 1.0\n");
+    printf("lcemu version 1.1\n");
 
     if (argc != 2) {
         printf("Usage: lcemu [source_file].bin\n");
