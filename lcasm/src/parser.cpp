@@ -59,21 +59,26 @@ uint16_t Parser::build_instr(Word& word) {
 
     if (word.kind == TokenKind::LDR || word.kind == TokenKind::STR) {
         if (check_overflow((int16_t)word.offVal, 6)) {
-            lex.error("Immediate value for LDR and STR must be a 6-bit 2's complement number");
+            lex.error(
+                "Immediate value for LDR and STR must be a 6-bit 2's complement number but instead "
+                "got " +
+                std::to_string(word.offVal));
         }
         data |= (word.memInstr.baseR << 6) | (word.offVal & 0x3F);
     } else if (word.kind == TokenKind::JSR) {
         if (check_overflow((int16_t)word.offVal, 11)) {
             lex.error(
                 "Immediate value for JSR must be an 11-bit 2's complement "
-                "number");
+                "number but instead got " +
+                std::to_string(word.offVal));
         }
         data |= 0x0800 | (word.offVal & 0x7FF);
     } else {
         if (check_overflow((int16_t)word.offVal, 9)) {
             lex.error(
                 "Immediate value for PCOffset9 must be a 9-bit 2's complement "
-                "number");
+                "number but instead got " +
+                std::to_string(word.offVal));
         }
         data |= (word.offVal & 0x1FF);
     }
@@ -91,11 +96,12 @@ void Parser::first_pass_parse() {
             lex.error("Must define .ORIG before block of instructions");
         }
         if (tkn.kind == TokenKind::LABEL) {
-            SymEntry<uint16_t>* entry = symTable.try_insert(tkn.str, std::move(curAddr));
+            SymEntry<uint16_t>* entry = symTable.put(tkn.str, std::move(curAddr));
             if (entry) {
                 fatal("Error: duplicate label '%s' at address x%04x and x%04x\n",
                       std::string(entry->symbol).c_str(), curAddr, entry->data);
             }
+            printf("%8s: %04x\n", std::string(tkn.str).c_str(), curAddr);
             tkn = lex.eat_token();
             if (tkn.kind == TokenKind::E_O_F) {
                 break;
@@ -152,8 +158,20 @@ void Parser::first_pass_parse() {
                     endAddr = curAddr;
                 }
                 break;
+            case TokenKind::TRAP:
+                tkn = lex.eat_token();
+                if (tkn.kind != TokenKind::LITERAL) {
+                    lex.error("TRAP must be followed by a trap vector index");
+                }
+                if (tkn.num > 0xFF) {
+                    lex.error("Trap vector index must be unsigned 8-bits");
+                }
+                insert_word(0xF000 | tkn.num);
             case TokenKind::HALT:
                 insert_word(0xF025);
+                break;
+            case TokenKind::NOP:
+                insert_word(0x0000);
                 break;
             case TokenKind::ADD:
             case TokenKind::AND:
@@ -192,7 +210,6 @@ void Parser::first_pass_parse() {
                 }
 
                 wordData |= try_parse_register() << 6;
-                assert_eat_comma();
 
                 insert_word(wordData);
                 break;
@@ -208,6 +225,9 @@ void Parser::first_pass_parse() {
             } break;
             case TokenKind::JSR: {
                 try_parse_pcoffset(tkn.kind);
+            } break;
+            case TokenKind::RET: {
+                insert_word(0xC1C0);
             } break;
             case TokenKind::LDR:
             case TokenKind::STR: {

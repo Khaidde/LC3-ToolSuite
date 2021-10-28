@@ -12,6 +12,7 @@ struct LC3 {
 
     void cache_status();
     void print_status();
+    void print_stack();
 
     bool halted = false;
     uint16_t PC = 0x3000;  // LC3 programs start at 0x3000
@@ -105,12 +106,15 @@ void LC3::execute() {
         case 0xF:  // TRAP
             R[7] = PC;
             switch (IR & 0xFF) {
+                case 0x21:
+                    printf("lcemu@0x%04x: 0x%04x(%d)\n", PC, R[0], R[0]);
+                    break;
                 case 0x25:
                     halted = true;
                     printf("Halting at %04x...\n", PC);
                     break;
                 default:
-                    fatal("Unimplemented trap address\n");
+                    fatal("Unimplemented trap address at %04x: addr=%02x\n", PC, IR & 0xFF);
             }
             break;
         default:
@@ -139,7 +143,8 @@ const char* opcodeToStr[NUM_OPCODES] = {
 
 void LC3::print_status() {
     printf("--------------\n");
-    printf("PC=%04x -> %04x [%s]\n", prevPC, PC, opcodeToStr[memory[prevPC] >> 12]);
+    printf("PC=%04x -> %04x [%s:%04x]\n", prevPC, PC, opcodeToStr[memory[prevPC] >> 12],
+           memory[prevPC]);
     for (size_t i = 0; i < 8; i++) {
         printf("R%d= %4.02x(%6.hi) -> %4.02x(%6.hi)", i, prevR[i], prevR[i], R[i], R[i]);
         if (prevR[i] != R[i]) {
@@ -147,8 +152,21 @@ void LC3::print_status() {
         }
         printf("\n");
     }
-    for (size_t i = 0x4100; i < 0x4117; i++) {
+    for (int i = 0x6000; memory[i]; i++) {
         printf("%c", (char)memory[i]);
+    }
+    printf("\n");
+    for (int i = 0x4000; i < 0x4007; i++) {
+        printf("%hi::", memory[i]);
+    }
+    printf("||\n");
+    print_stack();
+}
+
+void LC3::print_stack() {
+    printf("[0xff00]:");
+    for (size_t i = 0xf000 - 1; i >= R[6]; i--) {
+        printf("%04x:", memory[i]);
     }
     printf("|\n");
 }
@@ -165,16 +183,14 @@ void LC3::emulate(const char* binPath) {
         execute();
         // if (0x3000 <= prevPC && prevPC <= 0x3001) {
         // if (0x3002 == prevPC) {
-        if (a++ < 50) {
-            print_status();
-        }
+        a++;
+        // if () {
+        // print_status();
+        //}
     }
-    size_t i = 0x4100;
-    while (memory[i]) {
-        printf("%c", (char)memory[i]);
-        i++;
+    for (size_t i = 0x4000; i < 0x4010; i++) {
+        printf("--->%02x\n", memory[i]);
     }
-    printf("||\n");
 }
 
 int main(int argc, char** argv) {
@@ -184,6 +200,10 @@ int main(int argc, char** argv) {
         printf("Usage: lcemu [source_file].bin\n");
         return -1;
     }
-    LC3().emulate(argv[1]);
+    try {
+        LC3().emulate(argv[1]);
+    } catch (std::exception& e) {
+        printf("%s\n", e.what());
+    }
     return 0;
 }

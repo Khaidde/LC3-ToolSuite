@@ -54,5 +54,6 @@ struct Parser {
 
     uint16_t curAddr;  // Current address
     uint16_t endAddr;
+
     Word memory[1 << 16];
 };

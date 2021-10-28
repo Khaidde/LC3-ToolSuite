@@ -14,10 +14,6 @@ struct SymEntry {
 
 template <class T>
 struct SymTable {
-    static constexpr uint8_t NUM_BUCKETS_LOG2 = 5;
-    static constexpr uint8_t NUM_BUCKETS = 1 << NUM_BUCKETS_LOG2;
-    SymEntry<T>* table[NUM_BUCKETS];
-
     SymTable();
     ~SymTable();
 
@@ -30,9 +26,14 @@ struct SymTable {
     }
 
     // Returns duplicate symbol entry if it exists, otherwise nullptr
-    SymEntry<T>* try_insert(std::string_view& symbol, T&& data);
+    SymEntry<T>* put(std::string_view& symbol, T&& data);
 
-    T* get(const std::string_view& findSym);
+    T* get(const std::string_view& symbol);
+
+    static constexpr uint8_t NUM_BUCKETS_LOG2 = 5;
+    static constexpr uint8_t NUM_BUCKETS = 1 << NUM_BUCKETS_LOG2;
+    SymEntry<T>* table[NUM_BUCKETS];
+    std::size_t size;
 };
 
 template <class T>
@@ -55,7 +56,7 @@ SymTable<T>::~SymTable() {
 }
 
 template <class T>
-SymEntry<T>* SymTable<T>::try_insert(std::string_view& symbol, T&& data) {
+SymEntry<T>* SymTable<T>::put(std::string_view& symbol, T&& data) {
     uint8_t symHash = hash(symbol);
 
     SymEntry<T>* newEntry = new SymEntry<T>(symbol, std::move(data), nullptr);
@@ -68,20 +69,22 @@ SymEntry<T>* SymTable<T>::try_insert(std::string_view& symbol, T&& data) {
             cur = cur->next;
         }
         if (cur->symbol == symbol) {
+            delete newEntry;
             return cur;
         }
         cur->next = newEntry;
     }
+    size++;
     return nullptr;
 }
 
 template <class T>
-T* SymTable<T>::get(const std::string_view& findSym) {
-    uint8_t symHash = hash(findSym);
+T* SymTable<T>::get(const std::string_view& symbol) {
+    uint8_t symHash = hash(symbol);
 
     SymEntry<T>* cur = table[symHash];
     while (cur != nullptr) {
-        if (cur->symbol == findSym) {
+        if (cur->symbol == symbol) {
             return &cur->data;
         }
         cur = cur->next;

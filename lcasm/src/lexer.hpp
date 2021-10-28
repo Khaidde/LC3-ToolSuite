@@ -17,7 +17,9 @@ enum class TokenKind {
     JMP,
     JSR,
     JSRR,
+    RET,
 
+    NOP,
     TRAP,
     HALT,
 

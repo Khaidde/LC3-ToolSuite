@@ -18,7 +18,7 @@ void assemble(const char* srcPath, const char* dest) {
 }
 
 int main(int argc, char** argv) {
-    printf("lcasm version 1.1\n");
+    printf("lcasm version 1.2\n");
 
     if (argc != 2 && argc != 3) {
         printf("Usage: lcasm [source_file].asm [dest_file].bin\n");

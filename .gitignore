@@ -2,6 +2,7 @@
 .ccls
 .clang-format
 
-*/.vs
+**/.vs
+**/.idea
 bin/*
 */build

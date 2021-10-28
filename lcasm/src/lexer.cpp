@@ -47,7 +47,7 @@ void Lexer::shift_till_token() {
 }
 
 namespace {
-constexpr char NUM_KEYWORDS = 20;
+constexpr char NUM_KEYWORDS = 22;
 struct {
     const char* keyword;
     TokenKind kind;
@@ -58,9 +58,10 @@ struct {
     {"LEA", TokenKind::LEA},    {"ST", TokenKind::ST},
     {"STR", TokenKind::STR},    {"STI", TokenKind::STI},
     {"JMP", TokenKind::JMP},    {"JSR", TokenKind::JSR},
-    {"JSRR", TokenKind::JSRR},
+    {"JSRR", TokenKind::JSRR},  {"RET", TokenKind::RET},
 
-    {"TRAP", TokenKind::TRAP},  {"HALT", TokenKind::HALT},
+    {"NOP", TokenKind::NOP},    {"TRAP", TokenKind::TRAP},
+    {"HALT", TokenKind::HALT},
 
     {".ORIG", TokenKind::ORIG}, {".FILL", TokenKind::FILL},
     {".BLKW", TokenKind::BLKW}, {".STRINGZ", TokenKind::STRINGZ},

@@ -18,7 +18,7 @@ ifeq ($(shell which clang++),)
 $(error Could not find path to clang++)
 else
 CC := clang++
-CFLAGS += -O3
+CFLAGS += -g
 CFLAGS += -std=c++17 -Wall -Wextra -Werror -Wsign-conversion
 CFLAGS += -I./utils/src
 endif
@@ -58,6 +58,11 @@ ${BIN_DIR}/${DIR}.exe: ${OBJS} $(call get-objs,utils)
 ${DIR}/build/obj/%.o: ${DIR}/src/%.cpp
 	@${MKDIR} -p ${dir $@}
 	${CC} ${CFLAGS} -c $< -MMD -MF $(@:.o=.d) -o $@
+
+example:
+	lcc ./lcc/examples/main.c ./lcc/examples/main.asm
+	lcasm ./lcc/examples/main.asm ./lcc/examples/main.bin
+	lcemu ./lcc/examples/main.bin
 
 clean:
 	${RM} -f ${BIN_DIR}/*
