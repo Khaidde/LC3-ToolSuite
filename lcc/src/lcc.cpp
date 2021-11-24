@@ -11,7 +11,7 @@ int main(int argc, const char** argv) {
         return -1;
     }
     if (argc != 3 && argc != 2) {
-        printf("Usage: lcc [input_file].c [output_file].bin\n");
+        printf("Usage: lcc [input_file].c [output_file].asm\n");
         return -1;
     }
 

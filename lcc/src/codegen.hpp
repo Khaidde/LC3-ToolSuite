@@ -20,9 +20,10 @@ struct CodeGen {
     char gen_ident(NameNode* name);
     char gen_lit(LitNode* lit);
     char gen_bin_op(BinOpNode* binOp);
-    char gen_compare(Node* left, Node* right);
+    char gen_subtract(Node* left, Node* right);
     char gen_un_op(UnOpNode* unOp);
     char gen_subscript(SubscriptNode* subNode);
+    void gen_assignment(Node* assignTo, char assignAs);
 
     static constexpr char NUM_GENERAL_REG = 5;
     bool availableReg[NUM_GENERAL_REG];

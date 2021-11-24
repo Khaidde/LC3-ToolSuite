@@ -6,6 +6,8 @@ enum { LOWEST_PRECEDENCE = 0, HIGHEST_PRECEDENCE = 100 };
 int get_precedence(TokenType type) {
     switch (type) {
         case TokenType::OP_ASSIGN:
+        case TokenType::OP_ADD_EQUALS:
+        case TokenType::OP_SUB_EQUALS:
             return 1;
 
         case TokenType::BIT_AND:
@@ -24,6 +26,8 @@ int get_precedence(TokenType type) {
         case TokenType::OP_SUB_NEGATE:
             return 5;
 
+        case TokenType::OP_ADD_ADD:
+        case TokenType::OP_SUB_SUB:
         case TokenType::L_SUBSCRIPT:
         case TokenType::L_PARENS:  // function calls have highest precedence
             return 6;
@@ -141,7 +145,11 @@ std::unique_ptr<BlockNode> Parser::parse_block() {
             case TokenType::RETURN: {
                 auto ret = std::make_unique<ReturnNode>();
                 lexer.eat_token();  // Eat return
-                ret->expr = parse_expr();
+                if (lexer.peek_token()->type == TokenType::SEMI_COLON) {
+                    ret->expr = nullptr;
+                } else {
+                    ret->expr = parse_expr();
+                }
                 block->statements.push_back(std::move(ret));
                 assert_semi_colon();
             } break;
@@ -298,6 +306,8 @@ std::unique_ptr<TypeLitNode> Parser::parse_type() {
     switch (typeTkn->type) {
         case TokenType::INT:
             break;
+        case TokenType::VOID:
+            break;
         default:
             error(*typeTkn, "Expected a type");
     }
@@ -379,11 +389,14 @@ std::unique_ptr<Node> Parser::parse_operand(char exprDepth) {
             return expr;
         }
         case TokenType::ASTERISK:
+        case TokenType::OP_ADD_ADD:
+        case TokenType::OP_SUB_SUB:
         case TokenType::BIT_NOT:
         case TokenType::COND_NOT: {
             auto unOp = std::make_unique<UnOpNode>();
             unOp->op = lexer.eat_token()->type;
             unOp->inner = recur_expr(internal::HIGHEST_PRECEDENCE, exprDepth);
+            unOp->isPost = false;
             return unOp;
         }
         case TokenType::END:
@@ -405,7 +418,9 @@ std::unique_ptr<Node> Parser::recur_expr(char prec, char exprDepth) {
     }
     while (peekedPrec > prec) {
         switch (lexer.peek_token()->type) {
-            case TokenType::OP_ASSIGN: {
+            case TokenType::OP_ASSIGN:
+            case TokenType::OP_ADD_EQUALS:
+            case TokenType::OP_SUB_EQUALS: {
                 auto assignOp = std::make_unique<BinOpNode>();
                 assignOp->left = std::move(expr);
                 if (assignOp->left->type != NodeType::NAME) {
@@ -428,7 +443,8 @@ std::unique_ptr<Node> Parser::recur_expr(char prec, char exprDepth) {
             }
             case TokenType::L_PARENS: {
                 expr = parse_call(std::move(expr), exprDepth);
-            } break;
+                break;
+            }
             case TokenType::L_SUBSCRIPT: {
                 lexer.eat_token();  // Eat [
                 auto subNode = std::make_unique<SubscriptNode>();
@@ -439,6 +455,15 @@ std::unique_ptr<Node> Parser::recur_expr(char prec, char exprDepth) {
                 }
                 lexer.eat_token();  // Eat ]
                 expr = std::move(subNode);
+                break;
+            }
+            case TokenType::OP_ADD_ADD:
+            case TokenType::OP_SUB_SUB: {
+                auto postOp = std::make_unique<UnOpNode>();
+                postOp->inner = std::move(expr);
+                postOp->op = lexer.eat_token()->type;
+                postOp->isPost = true;
+                expr = std::move(postOp);
                 break;
             }
             default: {

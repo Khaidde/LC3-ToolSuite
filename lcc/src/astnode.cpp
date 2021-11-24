@@ -181,7 +181,7 @@ std::string recur_dump(const Node& node, int indentCt) {
         case NodeType::UN_OP: {
             auto& unOp = static_cast<const UnOpNode&>(node);
             dump += token_type_to_str(unOp.op);
-            dump += "\n";
+            dump += unOp.isPost ? " (post)\n" : "\n";
             dump += recur_dump(*unOp.inner, indentCt + 1);
         } break;
         case NodeType::SUBSCRIPT: {

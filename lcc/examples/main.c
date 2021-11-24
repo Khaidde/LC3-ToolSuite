@@ -1,38 +1,53 @@
 
-// clang-format off
-
-
-int max(int a, int b) {
+int addIfGreater(int a, int b) {
     if (a > b) {
+        return a + b;
+    } else {
         return 0;
     }
-    return 1;
 }
 
-int div(int x, int y) {
-    if (y > x) {
-        return 0;
+// LC3 does not support multiplication
+int mult(int a, int b) {
+    int res = 0;
+    while (a--) {
+        res += b;
     }
-    return div(x - y, y) + 1;
+    return res;
 }
 
-int map(int* array, int length) {
-    int i = 0;
-    int first;
-    int second;
-    int d;
-    int off;
-    while (i < length) {
-        first= array[i];
-        second= array[i + 1];
-        d = div(first, second);
-        off = max(first, second);
-        array[i + off] = d;
-        i = i + 2;
+int fact(int n) {
+    if (n <= 1) {
+        return 1;
     }
-    return 0;
+    return mult(n, fact(n - 1));
 }
 
+void strcpy(int* dest, int* src) {
+    while (*src) {
+        *dest = *src;
+        src++;
+        dest++;
+    }
+}
+
+int* staticAdr = 0x4000;
+
+int* testStr = "Hello World";
+
+/*
+ * This is a test block comment
+ */
 int main() {
-    return 0;
+    strcpy(staticAdr, testStr);
+
+    int* fourK = 0x4000;
+
+    int ptrArithmetic = *(fourK + 5);  // ptrArithmetic = ' ' = 32
+    int f = fact(7) + ptrArithmetic;   // f = 5040 + 32 = 5072
+
+    int arrayIndex = testStr[7];  // arrayIndex = 'o' = 111
+    f -= arrayIndex;              // f = 5183
+
+    return addIfGreater(f, 0x1D);  // Should return 4990
 }

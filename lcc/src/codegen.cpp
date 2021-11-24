@@ -116,10 +116,13 @@ void CodeGen::gen_block(BlockNode* block) {
                 break;
             case NodeType::RETURN: {
                 auto* ret = static_cast<ReturnNode*>(statement.get());
-                char reg = gen_expr(ret->expr.get());
-                fprintf(out, "\tSTR R%d, R5, 3\t;; Set return value to value in R%d\n", reg, reg);
+                if (ret->expr) {
+                    char reg = gen_expr(ret->expr.get());
+                    fprintf(out, "\tSTR R%d, R5, 3\t;; Set return value to value in R%d\n", reg,
+                            reg);
+                    free_reg(reg);
+                }
                 fprintf(out, "\tBR %sEnd\n", std::string(curFunction->functionName->str).c_str());
-                free_reg(reg);
             } break;
             case NodeType::IF: {
                 gen_if(static_cast<IfNode*>(statement.get()));
@@ -181,23 +184,23 @@ const char* CodeGen::optimize_branch_condition(Node* condition) {
             auto binop = static_cast<BinOpNode*>(condition);
             switch (binop->op) {
                 case TokenType::COND_EQUAL: {
-                    free_reg(gen_compare(binop->left.get(), binop->right.get()));
+                    free_reg(gen_subtract(binop->left.get(), binop->right.get()));
                     return "np";
                 } break;
                 case TokenType::COND_GT: {
-                    free_reg(gen_compare(binop->left.get(), binop->right.get()));
+                    free_reg(gen_subtract(binop->left.get(), binop->right.get()));
                     return "nz";
                 } break;
                 case TokenType::COND_LT: {
-                    free_reg(gen_compare(binop->left.get(), binop->right.get()));
+                    free_reg(gen_subtract(binop->left.get(), binop->right.get()));
                     return "zp";
                 } break;
                 case TokenType::COND_GT_EQUAL: {
-                    free_reg(gen_compare(binop->left.get(), binop->right.get()));
+                    free_reg(gen_subtract(binop->left.get(), binop->right.get()));
                     return "n";
                 } break;
                 case TokenType::COND_LT_EQUAL: {
-                    free_reg(gen_compare(binop->left.get(), binop->right.get()));
+                    free_reg(gen_subtract(binop->left.get(), binop->right.get()));
                     return "p";
                 } break;
                 default:
@@ -379,7 +382,7 @@ char CodeGen::gen_lit(LitNode* lit) {
             return reg;
         } break;
         case TokenType::STR_LITERAL: {
-            fatal("TODO implement string literal generation");
+            fatal("TODO implement local string literal generation");
         } break;
         default:
             fatal("TODO unimplemented literal generation");
@@ -390,62 +393,22 @@ char CodeGen::gen_bin_op(BinOpNode* binOp) {
     switch (binOp->op) {
         case TokenType::OP_ASSIGN: {
             char rreg = gen_expr(binOp->right.get());
-
-            switch (binOp->left->type) {
-                case NodeType::NAME: {
-                    auto name = static_cast<NameNode*>(binOp->left.get());
-                    std::string identName(get_ref_name(name));
-                    auto leftVal = internal::get_decl(curScope, identName);
-
-                    if (leftVal->type == NodeType::DECL) {
-                        auto decl = static_cast<DeclNode*>(leftVal);
-                        if (decl->isGlobal) {
-                            fprintf(out, "\tST R%d, %s", rreg, identName.c_str());
-                        } else if (decl->offset > 0) {
-                            fprintf(out, "\tSTR R%d, R5, -%d", rreg, decl->offset);
-                        } else {
-                            fprintf(out, "\tSTR R%d, R5, 0", rreg);
-                        }
-                    } else if (leftVal->type == NodeType::PARAM) {
-                        auto param = static_cast<ParamNode*>(leftVal);
-                        fprintf(out, "\tSTR R%d, R5, %d", rreg, 4 + param->offset);
-                    }
-                    fprintf(out, "\t;; %s = R%d\n", identName.c_str(), rreg);
-                } break;
-                case NodeType::UN_OP: {
-                    auto derefLValue = static_cast<UnOpNode*>(binOp->left.get());
-                    char lreg = gen_expr(derefLValue->inner.get());
-                    fprintf(out, "\tSTR R%d, R%d, 0\n", rreg, lreg);
-                    free_reg(lreg);
-                } break;
-                case NodeType::SUBSCRIPT: {
-                    auto subscriptLValue = static_cast<SubscriptNode*>(binOp->left.get());
-                    char pointerReg = gen_expr(subscriptLValue->pointer.get());
-                    if (subscriptLValue->index->type == NodeType::LIT) {
-                        auto litSubscript = static_cast<LitNode*>(subscriptLValue->index.get());
-                        if (litSubscript->literal->type != TokenType::INT_LITERAL) {
-                            if (litSubscript->literal->num <= 0xF) {
-                                fprintf(out, "\tSTR R%d, R%d, %d\t;; R%d[%d] = R%d\n", rreg,
-                                        pointerReg, litSubscript->literal->num, pointerReg,
-                                        litSubscript->literal->num, rreg);
-                                free_reg(pointerReg);
-                                break;
-                            } else {
-                                fatal("TODO allow max 6-bit offset for array index subscript");
-                            }
-                        }
-                    }
-                    char indexReg = gen_expr(subscriptLValue->index.get());
-                    fprintf(out, "\tADD R%d, R%d, R%d\t;; Get offset of R%d and store R%d\n",
-                            pointerReg, pointerReg, indexReg, pointerReg, rreg);
-                    free_reg(indexReg);
-                    fprintf(out, "\tSTR R%d, R%d, 0\n", rreg, pointerReg);
-                    free_reg(pointerReg);
-                } break;
-                default:
-                    fatal("Unimplemented code gen for assign lvalue");
-            }
+            gen_assignment(binOp->left.get(), rreg);
             return rreg;
+        }
+        case TokenType::OP_ADD_EQUALS: {
+            char lreg = gen_expr(binOp->left.get());
+            char rreg = gen_expr(binOp->right.get());
+            fprintf(out, "\tADD R%d, R%d, R%d\t;; R%d = R%d + R%d\n", lreg, lreg, rreg, lreg, lreg,
+                    rreg);
+            gen_assignment(binOp->left.get(), lreg);
+            free_reg(rreg);
+            return lreg;
+        }
+        case TokenType::OP_SUB_EQUALS: {
+            char res = gen_subtract(binOp->left.get(), binOp->right.get());
+            gen_assignment(binOp->left.get(), res);
+            return res;
         }
         case TokenType::OP_ADD: {
             char lreg = gen_expr(binOp->left.get());
@@ -457,21 +420,21 @@ char CodeGen::gen_bin_op(BinOpNode* binOp) {
         }
         case TokenType::COND_EQUAL:
         case TokenType::OP_SUB_NEGATE:
-            return gen_compare(binOp->left.get(), binOp->right.get());
+            return gen_subtract(binOp->left.get(), binOp->right.get());
         case TokenType::COND_GT: {
-            char cmpReg = gen_compare(binOp->left.get(), binOp->right.get());
+            char cmpReg = gen_subtract(binOp->left.get(), binOp->right.get());
             fprintf(out, "\tBRp 1\t\t;; If not positive, clear R%d\n", cmpReg);
             fprintf(out, "\tAND R%d, R%d, 0\n", cmpReg, cmpReg);
             return cmpReg;
         }
         case TokenType::COND_LT: {
-            char cmpReg = gen_compare(binOp->left.get(), binOp->right.get());
+            char cmpReg = gen_subtract(binOp->left.get(), binOp->right.get());
             fprintf(out, "\tBRn 1\t\t;; If not negative, clear R%d\n", cmpReg);
             fprintf(out, "\tAND R%d, R%d, 0\n", cmpReg, cmpReg);
             return cmpReg;
         }
         case TokenType::COND_GT_EQUAL: {
-            char cmpReg = gen_compare(binOp->left.get(), binOp->right.get());
+            char cmpReg = gen_subtract(binOp->left.get(), binOp->right.get());
             fprintf(out, "\tADD R%d, R%d, 1\t\t;; If not positive, clear R%d\n", cmpReg, cmpReg,
                     cmpReg);
             fprintf(out, "\tBRp 1\n", cmpReg);
@@ -479,7 +442,7 @@ char CodeGen::gen_bin_op(BinOpNode* binOp) {
             return cmpReg;
         }
         case TokenType::COND_LT_EQUAL: {
-            char cmpReg = gen_compare(binOp->left.get(), binOp->right.get());
+            char cmpReg = gen_subtract(binOp->left.get(), binOp->right.get());
             fprintf(out, "\tADD R%d, R%d, 1\t\t;; If not negative, clear R%d\n", cmpReg, cmpReg,
                     cmpReg);
             fprintf(out, "\tBRn 1\n", cmpReg);
@@ -499,7 +462,7 @@ char CodeGen::gen_bin_op(BinOpNode* binOp) {
     }
 }
 
-char CodeGen::gen_compare(Node* left, Node* right) {
+char CodeGen::gen_subtract(Node* left, Node* right) {
     char lreg = gen_expr(left);
     if (right->type == NodeType::LIT) {
         auto lit = static_cast<LitNode*>(right);
@@ -521,10 +484,38 @@ char CodeGen::gen_un_op(UnOpNode* unOp) {
             char inner = gen_expr(unOp->inner.get());
             fprintf(out, "\tLDR R%d, R%d, 0\t;; R%d = *R%d\n", inner, inner, inner, inner);
             return inner;
-        } break;
+        }
         case TokenType::BIT_NOT: {
             char inner = gen_expr(unOp->inner.get());
             fprintf(out, "\tNOT R%d, R%d\t;; R%d = ~R%d\n", inner, inner, inner, inner);
+            return inner;
+        }
+        case TokenType::OP_ADD_ADD: {
+            char inner = gen_expr(unOp->inner.get());
+            fprintf(out, "\tADD R%d, R%d, 1\t", inner, inner);
+            if (unOp->isPost) {
+                fprintf(out, ";; R%d++\n", inner);
+            } else {
+                fprintf(out, ";; ++R%d\n", inner);
+            }
+            gen_assignment(unOp->inner.get(), inner);
+            if (unOp->isPost) {
+                fprintf(out, "\tADD R%d, R%d, xFFFF\n", inner, inner);
+            }
+            return inner;
+        }
+        case TokenType::OP_SUB_SUB: {
+            char inner = gen_expr(unOp->inner.get());
+            fprintf(out, "\tADD R%d, R%d, xFFFF\t", inner, inner);
+            if (unOp->isPost) {
+                fprintf(out, ";; R%d--\n", inner);
+            } else {
+                fprintf(out, ";; --R%d\n", inner);
+            }
+            gen_assignment(unOp->inner.get(), inner);
+            if (unOp->isPost) {
+                fprintf(out, "\tADD R%d, R%d, 1\n", inner, inner);
+            }
             return inner;
         }
         case TokenType::COND_NOT: {
@@ -543,4 +534,64 @@ char CodeGen::gen_subscript(SubscriptNode* subNode) {
     free_reg(indexReg);
     fprintf(out, "\tLDR R%d, R%d, 0\n", pointerReg, pointerReg);
     return pointerReg;
+}
+
+void CodeGen::gen_assignment(Node* assignTo, char assignAs) {
+    switch (assignTo->type) {
+        case NodeType::NAME: {
+            auto name = static_cast<NameNode*>(assignTo);
+            std::string identifierName(get_ref_name(name));
+            auto leftVal = internal::get_decl(curScope, identifierName);
+
+            if (leftVal->type == NodeType::DECL) {
+                auto decl = static_cast<DeclNode*>(leftVal);
+                if (decl->isGlobal) {
+                    fprintf(out, "\tST R%d, %s", assignAs, identifierName.c_str());
+                } else if (decl->offset > 0) {
+                    fprintf(out, "\tSTR R%d, R5, -%d", assignAs, decl->offset);
+                } else {
+                    fprintf(out, "\tSTR R%d, R5, 0", assignAs);
+                }
+            } else if (leftVal->type == NodeType::PARAM) {
+                auto param = static_cast<ParamNode*>(leftVal);
+                fprintf(out, "\tSTR R%d, R5, %d", assignAs, 4 + param->offset);
+            }
+            fprintf(out, "\t;; %s = R%d\n", identifierName.c_str(), assignAs);
+        } break;
+        case NodeType::UN_OP: {
+            auto derefLValue = static_cast<UnOpNode*>(assignTo);
+            if (derefLValue->op != TokenType::ASTERISK) {
+                fatal("Cannot generate assignment for lvalue which is not a deref");
+            }
+            char lreg = gen_expr(derefLValue->inner.get());
+            fprintf(out, "\tSTR R%d, R%d, 0\n", assignAs, lreg);
+            free_reg(lreg);
+        } break;
+        case NodeType::SUBSCRIPT: {
+            auto subscriptLValue = static_cast<SubscriptNode*>(assignTo);
+            char pointerReg = gen_expr(subscriptLValue->pointer.get());
+            if (subscriptLValue->index->type == NodeType::LIT) {
+                auto litSubscript = static_cast<LitNode*>(subscriptLValue->index.get());
+                if (litSubscript->literal->type != TokenType::INT_LITERAL) {
+                    if (litSubscript->literal->num <= 0xF) {
+                        fprintf(out, "\tSTR R%d, R%d, %d\t;; R%d[%d] = R%d\n", assignAs, pointerReg,
+                                litSubscript->literal->num, pointerReg, litSubscript->literal->num,
+                                assignAs);
+                        free_reg(pointerReg);
+                        break;
+                    } else {
+                        fatal("TODO allow max 6-bit offset for array index subscript");
+                    }
+                }
+            }
+            char indexReg = gen_expr(subscriptLValue->index.get());
+            fprintf(out, "\tADD R%d, R%d, R%d\t;; Get offset of R%d and store R%d\n", pointerReg,
+                    pointerReg, indexReg, pointerReg, assignAs);
+            free_reg(indexReg);
+            fprintf(out, "\tSTR R%d, R%d, 0\n", assignAs, pointerReg);
+            free_reg(pointerReg);
+        } break;
+        default:
+            fatal("Unimplemented code gen for assign lvalue");
+    }
 }

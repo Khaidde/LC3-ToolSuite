@@ -132,6 +132,7 @@ struct BinOpNode : Node {
 struct UnOpNode : Node {
     TokenType op;
     std::unique_ptr<Node> inner;
+    bool isPost;
     UnOpNode() : Node(NodeType::UN_OP) {}
 };
 

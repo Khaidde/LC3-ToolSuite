@@ -17,6 +17,7 @@ enum class TokenType : uint8_t {
     WHILE,
 
     INT,  // note: int is 16-bits
+    VOID,
 
     IDENTIFIER,
     INT_LITERAL,
@@ -33,7 +34,11 @@ enum class TokenType : uint8_t {
 
     // Operators
     OP_ADD,
+    OP_ADD_ADD,
+    OP_ADD_EQUALS,
     OP_SUB_NEGATE,
+    OP_SUB_SUB,
+    OP_SUB_EQUALS,
 
     // Conditional Operators
     COND_NOT,

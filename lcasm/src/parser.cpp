@@ -95,7 +95,7 @@ void Parser::first_pass_parse() {
         if (!isOrigBlock && tkn.kind != TokenKind::ORIG) {
             lex.error("Must define .ORIG before block of instructions");
         }
-        if (tkn.kind == TokenKind::LABEL) {
+        while (tkn.kind == TokenKind::LABEL) {
             SymEntry<uint16_t>* entry = symTable.put(tkn.str, std::move(curAddr));
             if (entry) {
                 fatal("Error: duplicate label '%s' at address x%04x and x%04x\n",

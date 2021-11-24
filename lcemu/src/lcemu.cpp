@@ -171,7 +171,6 @@ void LC3::print_stack() {
     printf("|\n");
 }
 
-static int a = 0;
 void LC3::emulate(const char* binPath) {
     std::string file = read_file(binPath);
     for (size_t i = 0; i < file.length(); i += 2) {
@@ -181,15 +180,6 @@ void LC3::emulate(const char* binPath) {
         cache_status();
         IR = memory[PC++];
         execute();
-        // if (0x3000 <= prevPC && prevPC <= 0x3001) {
-        // if (0x3002 == prevPC) {
-        a++;
-        // if () {
-        // print_status();
-        //}
-    }
-    for (size_t i = 0x4000; i < 0x4010; i++) {
-        printf("--->%02x\n", memory[i]);
     }
 }
 

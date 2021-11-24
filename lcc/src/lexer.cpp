@@ -18,6 +18,8 @@ const char* token_type_to_str(TokenType type) {
             return "while";
         case TokenType::INT:
             return "int";
+        case TokenType::VOID:
+            return "void";
         case TokenType::IDENTIFIER:
             return "[IDENTIFIER]";
         case TokenType::INT_LITERAL:
@@ -34,8 +36,16 @@ const char* token_type_to_str(TokenType type) {
             return "~";
         case TokenType::OP_ADD:
             return "+";
+        case TokenType::OP_ADD_ADD:
+            return "++";
+        case TokenType::OP_ADD_EQUALS:
+            return "+=";
         case TokenType::OP_SUB_NEGATE:
             return "-";
+        case TokenType::OP_SUB_SUB:
+            return "--";
+        case TokenType::OP_SUB_EQUALS:
+            return "-=";
         case TokenType::COND_NOT:
             return "!";
         case TokenType::COND_EQUAL:
@@ -137,23 +147,47 @@ std::unique_ptr<Token> Lexer::eat_token() {
         return std::move(peekedToken);
     }
     while (curI < source.size()) {
-        if (source[curI] == '/' && curI + 1 < source.size() && source[curI + 1] == '/') {
-            curI += 2;
-            while (curI < source.size() && source[curI] != '\n') {
-                curI++;
-            }
-            if (curI >= source.size()) {
-                break;
+        if (source[curI] == '/' && curI + 1 < source.size()) {
+            if (source[curI + 1] == '/') {
+                curI += 2;
+                while (curI < source.size() && source[curI] != '\n') {
+                    curI++;
+                }
+                if (curI >= source.size()) {
+                    break;
+                }
+            } else if (source[curI + 1] == '*') {
+                col += 2;
+                curI += 2;
+                while (curI < source.size()) {
+                    if (source[curI] == '*') {
+                        if (curI + 1 < source.size() && source[curI + 1] == '/') {
+                            col += 2;
+                            curI += 2;
+                            break;
+                        }
+                    }
+                    col++;
+                    if (source[curI] == '\n') {
+                        line++;
+                        col = 0;
+                    }
+                    curI++;
+                }
+                if (curI >= source.size()) {
+                    break;
+                }
             }
         }
         if (!is_whitespace(source[curI])) {
             break;
         }
         col++;
-        if (source[curI++] == '\n') {
+        if (source[curI] == '\n') {
             line++;
             col = 0;
         }
+        curI++;
     }
     if (curI >= source.size()) {
         return make_token(TokenType::END);
@@ -193,7 +227,15 @@ std::unique_ptr<Token> Lexer::eat_token() {
             return make_token(TokenType::BIT_AND);
         case '+':
             eat_ch();
-            return make_token(TokenType::OP_ADD);
+            if (check_ch('+')) {
+                eat_ch();
+                return make_token(TokenType::OP_ADD_ADD);
+            } else if (check_ch('=')) {
+                eat_ch();
+                return make_token(TokenType::OP_ADD_EQUALS);
+            } else {
+                return make_token(TokenType::OP_ADD);
+            }
         case '~':
             eat_ch();
             return make_token(TokenType::BIT_NOT);
@@ -261,6 +303,12 @@ std::unique_ptr<Token> Lexer::eat_token() {
                 return make_token(TokenType::RETURN);
             }
             return eat_identifier();
+        case 'v':
+            curOff++;
+            if (check_ident("oid")) {
+                return make_token(TokenType::VOID);
+            }
+            return eat_identifier();
         case 'w':
             curOff++;
             if (check_ident("hile")) {
@@ -269,7 +317,13 @@ std::unique_ptr<Token> Lexer::eat_token() {
             return eat_identifier();
         case '-':
             eat_ch();
-            if (is_number(source[curI + curOff])) {
+            if (check_ch('-')) {
+                eat_ch();
+                return make_token(TokenType::OP_SUB_SUB);
+            } else if (check_ch('=')) {
+                eat_ch();
+                return make_token(TokenType::OP_SUB_EQUALS);
+            } else if (is_number(source[curI + curOff])) {
                 uint16_t val = -eat_num_lit();
                 auto tkn = make_token(TokenType::INT_LITERAL);
                 tkn->num = val;
